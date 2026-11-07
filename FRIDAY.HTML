@@ -1,0 +1,1454 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Astra AI Assistant</title>
+  <style>
+    :root {
+      --bg: #061018;
+      --panel: rgba(7, 24, 35, 0.74);
+      --panel-strong: rgba(9, 32, 45, 0.92);
+      --line: rgba(126, 232, 255, 0.26);
+      --text: #eefbff;
+      --muted: #9cc3ce;
+      --cyan: #55dfff;
+      --lime: #a9f66c;
+      --amber: #ffca66;
+      --rose: #ff6b93;
+      --shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      min-height: 100%;
+      margin: 0;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    body {
+      overflow-x: hidden;
+    }
+
+    button,
+    input,
+    textarea {
+      font: inherit;
+    }
+
+    .backdrop,
+    #matrix,
+    .scanline,
+    .rings {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .backdrop {
+      background:
+        radial-gradient(circle at 20% 22%, rgba(85, 223, 255, 0.2), transparent 30%),
+        radial-gradient(circle at 82% 70%, rgba(169, 246, 108, 0.18), transparent 28%),
+        linear-gradient(145deg, #061018 0%, #091722 46%, #05080d 100%);
+      z-index: -4;
+    }
+
+    #matrix {
+      z-index: -3;
+      opacity: 0.74;
+    }
+
+    .rings {
+      z-index: -2;
+      background:
+        repeating-radial-gradient(circle at 50% 49%, transparent 0 52px, rgba(85, 223, 255, 0.08) 53px, transparent 55px),
+        linear-gradient(90deg, rgba(85, 223, 255, 0.06) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(85, 223, 255, 0.05) 1px, transparent 1px);
+      background-size: auto, 70px 70px, 70px 70px;
+      mask-image: radial-gradient(circle at 50% 48%, black 0 48%, transparent 76%);
+      animation: drift 22s linear infinite;
+    }
+
+    .scanline {
+      z-index: -1;
+      background: linear-gradient(180deg, transparent, rgba(85, 223, 255, 0.08), transparent);
+      height: 22%;
+      animation: scan 7s ease-in-out infinite;
+      opacity: 0.42;
+    }
+
+    .launch-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: grid;
+      place-items: center;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 50% 42%, rgba(85, 223, 255, 0.24), transparent 34%),
+        linear-gradient(180deg, #02080d 0%, rgba(6, 16, 24, 0.96) 52%, rgba(2, 8, 13, 0.98) 100%);
+      animation: launchVanish 650ms ease 1.75s forwards;
+    }
+
+    .launch-screen::after {
+      content: "";
+      position: absolute;
+      inset: auto 0 0;
+      height: 38%;
+      background: linear-gradient(0deg, rgba(85, 223, 255, 0.16), transparent);
+      transform-origin: bottom;
+      animation: floorWake 1.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .launch-orb {
+      width: min(290px, 62vw);
+      aspect-ratio: 1;
+      border-radius: 50%;
+      position: relative;
+      display: grid;
+      place-items: center;
+      filter: drop-shadow(0 0 34px rgba(85, 223, 255, 0.55));
+      animation: launchOrb 1.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .launch-orb::before,
+    .launch-orb::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 1px solid rgba(126, 232, 255, 0.58);
+      background:
+        repeating-conic-gradient(from 0deg, rgba(85, 223, 255, 0.95) 0 3deg, transparent 3deg 12deg);
+      mask-image: radial-gradient(circle, transparent 0 68%, black 69% 72%, transparent 73%);
+      animation: rotateRing 2.2s linear infinite;
+    }
+
+    .launch-orb::after {
+      inset: 46px;
+      border-color: rgba(169, 246, 108, 0.48);
+      animation-duration: 3.2s;
+      animation-direction: reverse;
+    }
+
+    .launch-core {
+      width: 82px;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: radial-gradient(circle, #f8feff 0 12%, var(--cyan) 13% 42%, rgba(85, 223, 255, 0.12) 43% 100%);
+      box-shadow: 0 0 46px rgba(238, 251, 255, 0.8), inset 0 0 22px rgba(255, 255, 255, 0.42);
+    }
+
+    .launch-copy {
+      position: absolute;
+      bottom: 11vh;
+      display: grid;
+      gap: 8px;
+      text-align: center;
+      color: var(--muted);
+      text-transform: uppercase;
+      font-size: 0.78rem;
+    }
+
+    .launch-copy strong {
+      color: var(--text);
+      font-size: 1rem;
+    }
+
+    @keyframes drift {
+      to {
+        transform: rotate(1turn) scale(1.03);
+      }
+    }
+
+    @keyframes scan {
+      0% {
+        transform: translateY(-35vh);
+      }
+      100% {
+        transform: translateY(120vh);
+      }
+    }
+
+    .shell {
+      width: min(1440px, calc(100% - 32px));
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 22px 0 28px;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 18px;
+      opacity: 0;
+      transform: translateY(38px);
+      animation: shellRise 820ms cubic-bezier(0.16, 1, 0.3, 1) 1.25s forwards;
+    }
+
+    .topbar {
+      min-height: 72px;
+      border: 1px solid var(--line);
+      background: linear-gradient(90deg, rgba(7, 24, 35, 0.78), rgba(8, 18, 27, 0.58));
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 14px 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .mark {
+      width: 46px;
+      aspect-ratio: 1;
+      border: 1px solid rgba(85, 223, 255, 0.55);
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      position: relative;
+      box-shadow: 0 0 28px rgba(85, 223, 255, 0.34);
+    }
+
+    .mark::before,
+    .mark::after {
+      content: "";
+      position: absolute;
+      border-radius: 50%;
+      border: 1px solid rgba(169, 246, 108, 0.35);
+      inset: 7px;
+      animation: pulse 2.5s ease-in-out infinite;
+    }
+
+    .mark::after {
+      inset: 15px;
+      background: var(--cyan);
+      border: 0;
+      box-shadow: 0 0 18px var(--cyan);
+      animation-delay: 0.4s;
+    }
+
+    @keyframes pulse {
+      50% {
+        transform: scale(1.12);
+        opacity: 0.45;
+      }
+    }
+
+    h1,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: clamp(1.18rem, 2vw, 1.7rem);
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .status-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .chip {
+      height: 36px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      border: 1px solid rgba(126, 232, 255, 0.24);
+      background: rgba(4, 16, 24, 0.62);
+      color: var(--muted);
+      border-radius: 999px;
+      white-space: nowrap;
+      font-size: 0.88rem;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--lime);
+      box-shadow: 0 0 14px var(--lime);
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(280px, 0.86fr) minmax(350px, 1.34fr) minmax(280px, 0.9fr);
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+      border-radius: 8px;
+      overflow: hidden;
+      min-width: 0;
+      animation: panelLift 740ms cubic-bezier(0.16, 1, 0.3, 1) 1.38s both;
+    }
+
+    .workspace > .panel:nth-child(2) {
+      animation-delay: 1.28s;
+    }
+
+    .workspace > .panel:nth-child(3) {
+      animation-delay: 1.48s;
+    }
+
+    .panel-head {
+      min-height: 52px;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(126, 232, 255, 0.18);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .panel-title {
+      font-weight: 750;
+      font-size: 0.98rem;
+    }
+
+    .panel-body {
+      padding: 16px;
+    }
+
+    .core-panel {
+      min-height: 690px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+
+    .orb-zone {
+      min-height: 350px;
+      display: grid;
+      place-items: center;
+      padding: 18px 16px 8px;
+      position: relative;
+    }
+
+    .orb-stage {
+      width: min(560px, 100%);
+      min-height: 332px;
+      position: relative;
+      display: grid;
+      place-items: center;
+    }
+
+    .assistant-orb {
+      width: min(318px, 68vw);
+      aspect-ratio: 1;
+      border-radius: 50%;
+      position: relative;
+      display: grid;
+      place-items: center;
+      background:
+        linear-gradient(90deg, transparent 49.6%, rgba(238, 251, 255, 0.25) 50%, transparent 50.4%),
+        linear-gradient(0deg, transparent 49.6%, rgba(238, 251, 255, 0.2) 50%, transparent 50.4%),
+        radial-gradient(circle, rgba(238, 251, 255, 0.95) 0 2.5%, transparent 3.4%),
+        repeating-conic-gradient(from 0deg, rgba(85, 223, 255, 0.42) 0 2deg, transparent 2deg 8deg),
+        radial-gradient(circle, transparent 0 28%, rgba(85, 223, 255, 0.22) 29% 30%, transparent 31% 44%, rgba(169, 246, 108, 0.14) 45% 46%, transparent 47%),
+        conic-gradient(from 0deg, rgba(85, 223, 255, 0.02), rgba(85, 223, 255, 0.86), rgba(6, 16, 24, 0.1), rgba(169, 246, 108, 0.78), rgba(85, 223, 255, 0.02));
+      box-shadow: 0 0 58px rgba(85, 223, 255, 0.36), inset 0 0 38px rgba(85, 223, 255, 0.22);
+      overflow: hidden;
+      animation: orbBreathe 3.8s ease-in-out infinite;
+    }
+
+    .assistant-orb::before,
+    .assistant-orb::after {
+      content: "";
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .assistant-orb::before {
+      inset: 18px;
+      border: 1px solid rgba(126, 232, 255, 0.42);
+      box-shadow: 0 0 24px rgba(85, 223, 255, 0.16);
+      transform: rotateX(68deg);
+    }
+
+    .assistant-orb::after {
+      inset: 33%;
+      background: radial-gradient(circle, rgba(238, 251, 255, 0.96), rgba(85, 223, 255, 0.36) 44%, transparent 68%);
+      filter: blur(1px);
+      opacity: 0.92;
+    }
+
+    .assistant-orb.is-active {
+      box-shadow: 0 0 84px rgba(169, 246, 108, 0.42), inset 0 0 42px rgba(85, 223, 255, 0.32);
+    }
+
+    .orb-ring {
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .ring-one {
+      inset: 7px;
+      border: 2px solid rgba(126, 232, 255, 0.6);
+      border-right-color: transparent;
+      border-bottom-color: rgba(169, 246, 108, 0.62);
+      animation: rotateRing 10s linear infinite;
+    }
+
+    .ring-two {
+      inset: 43px;
+      border: 1px dashed rgba(238, 251, 255, 0.42);
+      animation: rotateRing 16s linear infinite reverse;
+    }
+
+    .ring-three {
+      inset: 76px;
+      background: conic-gradient(transparent 0 16%, rgba(255, 202, 102, 0.8) 17% 21%, transparent 22% 48%, rgba(85, 223, 255, 0.85) 49% 54%, transparent 55%);
+      mask-image: radial-gradient(circle, transparent 0 calc(100% - 4px), black calc(100% - 3px) 100%);
+      animation: rotateRing 6.5s linear infinite;
+    }
+
+    .orb-core {
+      width: 98px;
+      aspect-ratio: 1;
+      position: relative;
+      z-index: 2;
+      border-radius: 50%;
+      border: 1px solid rgba(238, 251, 255, 0.7);
+      background:
+        radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.98) 0 12%, rgba(85, 223, 255, 0.66) 13% 42%, rgba(2, 10, 16, 0.86) 43% 100%);
+      box-shadow: 0 0 38px rgba(238, 251, 255, 0.56), inset 0 0 20px rgba(255, 255, 255, 0.32);
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: #f7fdff;
+    }
+
+    .orb-core strong {
+      display: block;
+      font-size: 1.5rem;
+      line-height: 1;
+    }
+
+    .orb-core span {
+      display: block;
+      margin-top: 4px;
+      font-size: 0.52rem;
+      color: rgba(238, 251, 255, 0.78);
+      text-transform: uppercase;
+    }
+
+    .audio-column {
+      position: absolute;
+      top: 52px;
+      bottom: 58px;
+      width: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+    }
+
+    .audio-left {
+      left: clamp(4px, 4vw, 42px);
+    }
+
+    .audio-right {
+      right: clamp(4px, 4vw, 42px);
+    }
+
+    .audio-column span {
+      width: 5px;
+      height: 28%;
+      min-height: 28px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, var(--lime), var(--cyan));
+      box-shadow: 0 0 18px rgba(85, 223, 255, 0.42);
+      transform-origin: center bottom;
+      animation: equalize 1.18s ease-in-out infinite;
+      animation-delay: var(--delay);
+      opacity: 0.62;
+    }
+
+    .audio-column:not(.is-active) span {
+      animation-duration: 2.4s;
+      opacity: 0.38;
+    }
+
+    .audio-column span:nth-child(2),
+    .audio-column span:nth-child(6) {
+      height: 46%;
+    }
+
+    .audio-column span:nth-child(3),
+    .audio-column span:nth-child(5) {
+      height: 66%;
+    }
+
+    .audio-column span:nth-child(4) {
+      height: 86%;
+    }
+
+    .orb-label {
+      position: absolute;
+      inset: auto 18px 30px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.35;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(1turn);
+      }
+    }
+
+    @keyframes rotateRing {
+      to {
+        transform: rotate(1turn);
+      }
+    }
+
+    @keyframes orbBreathe {
+      0%,
+      100% {
+        transform: scale(0.985);
+      }
+      50% {
+        transform: scale(1.018);
+      }
+    }
+
+    @keyframes equalize {
+      0%,
+      100% {
+        transform: scaleY(0.44);
+      }
+      50% {
+        transform: scaleY(1);
+      }
+    }
+
+    @keyframes shellRise {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes panelLift {
+      from {
+        opacity: 0;
+        transform: translateY(28px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes launchOrb {
+      0% {
+        opacity: 0;
+        transform: translateY(-42px) scale(0.48);
+      }
+      62% {
+        opacity: 1;
+        transform: translateY(0) scale(1.08);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(-8px) scale(1);
+      }
+    }
+
+    @keyframes floorWake {
+      from {
+        opacity: 0;
+        transform: scaleY(0);
+      }
+      to {
+        opacity: 1;
+        transform: scaleY(1);
+      }
+    }
+
+    @keyframes launchVanish {
+      to {
+        opacity: 0;
+        visibility: hidden;
+      }
+    }
+
+    .chat {
+      padding: 16px;
+      overflow: auto;
+      display: grid;
+      align-content: start;
+      gap: 12px;
+      min-height: 260px;
+      max-height: 370px;
+    }
+
+    .message {
+      width: min(84%, 680px);
+      padding: 12px 14px;
+      border: 1px solid rgba(126, 232, 255, 0.2);
+      background: rgba(4, 16, 24, 0.58);
+      border-radius: 8px;
+      line-height: 1.5;
+      color: #d9f6ff;
+    }
+
+    .message.user {
+      justify-self: end;
+      border-color: rgba(169, 246, 108, 0.34);
+      background: rgba(42, 62, 22, 0.28);
+      color: #efffde;
+    }
+
+    .composer {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 10px;
+      padding: 14px 16px 16px;
+      border-top: 1px solid rgba(126, 232, 255, 0.18);
+    }
+
+    .icon-button,
+    .action-button {
+      border: 1px solid rgba(126, 232, 255, 0.32);
+      background: rgba(4, 16, 24, 0.76);
+      color: var(--text);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+    }
+
+    .icon-button {
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      font-size: 1.1rem;
+    }
+
+    .action-button {
+      min-height: 46px;
+      padding: 0 18px;
+      font-weight: 750;
+      background: linear-gradient(135deg, rgba(85, 223, 255, 0.9), rgba(169, 246, 108, 0.82));
+      color: #061018;
+      border-color: transparent;
+    }
+
+    .icon-button:hover,
+    .action-button:hover {
+      transform: translateY(-1px);
+      border-color: rgba(169, 246, 108, 0.62);
+    }
+
+    .command-input {
+      width: 100%;
+      min-height: 46px;
+      border: 1px solid rgba(126, 232, 255, 0.28);
+      background: rgba(2, 10, 16, 0.68);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 0 14px;
+      outline: none;
+    }
+
+    .command-input:focus {
+      border-color: rgba(169, 246, 108, 0.65);
+      box-shadow: 0 0 0 3px rgba(169, 246, 108, 0.1);
+    }
+
+    .metric-grid,
+    .command-grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .metric-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .metric,
+    .command-card,
+    .skill-card,
+    .setting-row,
+    .log-line {
+      border: 1px solid rgba(126, 232, 255, 0.18);
+      background: rgba(3, 13, 20, 0.54);
+      border-radius: 8px;
+    }
+
+    .metric {
+      min-height: 92px;
+      padding: 14px;
+      display: grid;
+      align-content: space-between;
+      gap: 8px;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .metric strong {
+      font-size: 1.35rem;
+      line-height: 1;
+    }
+
+    .command-card {
+      width: 100%;
+      min-height: 72px;
+      padding: 12px 13px;
+      text-align: left;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .skill-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .skill-card {
+      min-height: 94px;
+      padding: 12px;
+      color: var(--text);
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .command-card b,
+    .skill-card b {
+      display: block;
+      font-size: 0.94rem;
+      margin-bottom: 5px;
+    }
+
+    .command-card span,
+    .skill-card span,
+    .log-line,
+    .setting-row label,
+    .field-label {
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.35;
+    }
+
+    .command-card:hover {
+      border-color: rgba(169, 246, 108, 0.48);
+      background: rgba(10, 34, 34, 0.66);
+    }
+
+    .skill-card:hover {
+      border-color: rgba(255, 202, 102, 0.48);
+      background: rgba(38, 31, 13, 0.46);
+    }
+
+    .skill-meter {
+      height: 5px;
+      margin-top: 10px;
+      border-radius: 999px;
+      background: rgba(126, 232, 255, 0.14);
+      overflow: hidden;
+    }
+
+    .skill-meter i {
+      display: block;
+      width: var(--level);
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--cyan), var(--lime));
+      box-shadow: 0 0 12px rgba(85, 223, 255, 0.52);
+    }
+
+    .setting-row {
+      min-height: 54px;
+      padding: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .toggle {
+      position: relative;
+      width: 48px;
+      height: 28px;
+      flex: 0 0 auto;
+    }
+
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: rgba(126, 232, 255, 0.16);
+      border: 1px solid rgba(126, 232, 255, 0.3);
+      border-radius: 999px;
+    }
+
+    .slider::before {
+      content: "";
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      left: 3px;
+      top: 3px;
+      background: var(--muted);
+      border-radius: 50%;
+      transition: transform 0.18s ease, background 0.18s ease;
+    }
+
+    .toggle input:checked + .slider::before {
+      transform: translateX(20px);
+      background: var(--lime);
+      box-shadow: 0 0 14px rgba(169, 246, 108, 0.7);
+    }
+
+    .select,
+    .api-box {
+      width: 100%;
+      min-height: 42px;
+      margin-top: 8px;
+      border: 1px solid rgba(126, 232, 255, 0.28);
+      background: rgba(2, 10, 16, 0.72);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 0 12px;
+    }
+
+    .logs {
+      display: grid;
+      gap: 10px;
+    }
+
+    .log-line {
+      padding: 10px 12px;
+    }
+
+    .theme-aurora {
+      --bg: #0f1119;
+      --panel: rgba(20, 19, 33, 0.72);
+      --panel-strong: rgba(23, 21, 35, 0.92);
+      --line: rgba(255, 184, 108, 0.26);
+      --cyan: #7ee8ff;
+      --lime: #ffca66;
+      --muted: #c8bfae;
+    }
+
+    .theme-command {
+      --bg: #050b08;
+      --panel: rgba(6, 22, 13, 0.74);
+      --panel-strong: rgba(7, 29, 17, 0.92);
+      --line: rgba(129, 255, 176, 0.25);
+      --cyan: #81ffb0;
+      --lime: #57d7ff;
+      --muted: #a8c8b4;
+    }
+
+    @media (max-width: 1100px) {
+      .workspace {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .core-panel {
+        grid-column: 1 / -1;
+        order: -1;
+      }
+    }
+
+    @media (max-width: 740px) {
+      .shell {
+        width: min(100% - 20px, 1440px);
+        padding-top: 10px;
+      }
+
+      .topbar,
+      .workspace,
+      .composer {
+        grid-template-columns: 1fr;
+      }
+
+      .topbar,
+      .status-row {
+        justify-content: flex-start;
+      }
+
+      .workspace {
+        display: grid;
+      }
+
+      .metric-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .composer {
+        gap: 8px;
+      }
+
+      .icon-button,
+      .action-button {
+        width: 100%;
+      }
+
+      .assistant-orb {
+        width: min(250px, 78vw);
+      }
+
+      .orb-stage {
+        min-height: 285px;
+      }
+
+      .audio-column {
+        width: 30px;
+        gap: 3px;
+      }
+
+      .audio-column span {
+        width: 3px;
+      }
+
+      .skill-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .message {
+        width: 100%;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="launch-screen" aria-hidden="true">
+    <div class="launch-orb">
+      <div class="launch-core"></div>
+    </div>
+    <div class="launch-copy">
+      <strong>Astra online</strong>
+      <span>Voice matrix calibrating</span>
+    </div>
+  </div>
+
+  <div class="backdrop"></div>
+  <canvas id="matrix"></canvas>
+  <div class="rings"></div>
+  <div class="scanline"></div>
+
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="mark" aria-hidden="true"></div>
+        <div>
+          <h1>Astra AI Assistant</h1>
+          <p class="subtitle">Jarvis/Friday-inspired command center for voice, chat, and quick automation demos.</p>
+        </div>
+      </div>
+      <div class="status-row" aria-label="Assistant status">
+        <div class="chip"><span class="dot"></span><span id="statusText">Online</span></div>
+        <div class="chip" id="clockChip">00:00</div>
+        <div class="chip" id="voiceChip">Voice ready</div>
+      </div>
+    </header>
+
+    <section class="workspace" aria-label="Assistant workspace">
+      <aside class="panel">
+        <div class="panel-head">
+          <div class="panel-title">Systems</div>
+          <div class="chip">Live</div>
+        </div>
+        <div class="panel-body">
+          <div class="metric-grid">
+            <div class="metric"><span>CPU Load</span><strong id="cpuMetric">18%</strong></div>
+            <div class="metric"><span>Memory</span><strong id="memMetric">42%</strong></div>
+            <div class="metric"><span>Network</span><strong id="netMetric">Secure</strong></div>
+            <div class="metric"><span>Mode</span><strong id="modeMetric">Assist</strong></div>
+          </div>
+        </div>
+        <div class="panel-head">
+          <div class="panel-title">Quick Commands</div>
+        </div>
+        <div class="panel-body command-grid">
+          <button class="command-card" data-command="show system status">
+            <b>System Status</b>
+            <span>Check simulated CPU, memory, network, and assistant mode.</span>
+          </button>
+          <button class="command-card" data-command="what time is it">
+            <b>Time Check</b>
+            <span>Ask the assistant for the current local time.</span>
+          </button>
+          <button class="command-card" data-command="activate focus mode">
+            <b>Focus Mode</b>
+            <span>Switch the command center into quiet work mode.</span>
+          </button>
+          <button class="command-card" data-command="change background">
+            <b>Change Background</b>
+            <span>Rotate the visual theme and background energy.</span>
+          </button>
+        </div>
+      </aside>
+
+      <section class="panel core-panel">
+        <div class="orb-zone">
+          <div class="orb-stage">
+            <div class="audio-column audio-left" aria-hidden="true">
+              <span style="--delay: -0.1s"></span>
+              <span style="--delay: -0.35s"></span>
+              <span style="--delay: -0.62s"></span>
+              <span style="--delay: -0.25s"></span>
+              <span style="--delay: -0.52s"></span>
+              <span style="--delay: -0.18s"></span>
+            </div>
+            <div class="assistant-orb" id="assistantOrb" aria-hidden="true">
+              <span class="orb-ring ring-one"></span>
+              <span class="orb-ring ring-two"></span>
+              <span class="orb-ring ring-three"></span>
+              <div class="orb-core">
+                <div>
+                  <strong>60</strong>
+                  <span>FPS Contrast</span>
+                </div>
+              </div>
+            </div>
+            <div class="audio-column audio-right" aria-hidden="true">
+              <span style="--delay: -0.2s"></span>
+              <span style="--delay: -0.5s"></span>
+              <span style="--delay: -0.1s"></span>
+              <span style="--delay: -0.7s"></span>
+              <span style="--delay: -0.3s"></span>
+              <span style="--delay: -0.58s"></span>
+            </div>
+          </div>
+          <p class="orb-label" id="orbLabel">Awaiting command input. Try "change background" or "activate focus mode".</p>
+        </div>
+        <div class="chat" id="chatLog" aria-live="polite"></div>
+        <form class="composer" id="composer">
+          <button class="icon-button" type="button" id="listenButton" title="Start voice input" aria-label="Start voice input">mic</button>
+          <input class="command-input" id="commandInput" autocomplete="off" placeholder="Type a command for Astra...">
+          <button class="action-button" type="submit">Send</button>
+        </form>
+      </section>
+
+      <aside class="panel">
+        <div class="panel-head">
+          <div class="panel-title">Controls</div>
+          <button class="icon-button" type="button" id="clearButton" title="Clear chat" aria-label="Clear chat">clear</button>
+        </div>
+        <div class="panel-body">
+          <div class="setting-row">
+            <div>
+              <strong>Voice Reply</strong>
+              <label for="voiceToggle">Speak assistant responses aloud.</label>
+            </div>
+            <label class="toggle">
+              <input id="voiceToggle" type="checkbox" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="setting-row">
+            <div>
+              <strong>Auto Scan</strong>
+              <label for="scanToggle">Animate diagnostics and status numbers.</label>
+            </div>
+            <label class="toggle">
+              <input id="scanToggle" type="checkbox" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+          <label class="field-label" for="themeSelect">Background design</label>
+          <select class="select" id="themeSelect">
+            <option value="">Arc Reactor Blue</option>
+            <option value="theme-command">Command Green</option>
+            <option value="theme-aurora">Aurora Amber</option>
+          </select>
+          <label class="field-label" for="personaInput" style="display:block;margin-top:16px;">Assistant name</label>
+          <input class="api-box" id="personaInput" value="Astra" maxlength="18">
+        </div>
+        <div class="panel-head">
+          <div class="panel-title">Refined Skills</div>
+          <div class="chip">Ready</div>
+        </div>
+        <div class="panel-body skill-grid">
+          <button class="skill-card" data-command="activate voice control">
+            <b>Voice Control</b>
+            <span>Mic input, spoken response, and live audio levels.</span>
+            <span class="skill-meter"><i style="--level: 92%"></i></span>
+          </button>
+          <button class="skill-card" data-command="activate room mode">
+            <b>Room Mode</b>
+            <span>Full command-room launch and assistant arrival animation.</span>
+            <span class="skill-meter"><i style="--level: 88%"></i></span>
+          </button>
+          <button class="skill-card" data-command="run visual scan">
+            <b>Visual Scan</b>
+            <span>High-contrast HUD rings and motion-calibrated background.</span>
+            <span class="skill-meter"><i style="--level: 84%"></i></span>
+          </button>
+          <button class="skill-card" data-command="show task skills">
+            <b>Task Skills</b>
+            <span>Status checks, time, focus mode, theme control, and logs.</span>
+            <span class="skill-meter"><i style="--level: 79%"></i></span>
+          </button>
+        </div>
+        <div class="panel-head">
+          <div class="panel-title">Activity Log</div>
+        </div>
+        <div class="panel-body logs" id="activityLog"></div>
+      </aside>
+    </section>
+  </main>
+
+  <script>
+    const state = {
+      name: "Astra",
+      themeIndex: 0,
+      themes: ["", "theme-command", "theme-aurora"],
+      listening: false
+    };
+
+    const chatLog = document.querySelector("#chatLog");
+    const activityLog = document.querySelector("#activityLog");
+    const commandInput = document.querySelector("#commandInput");
+    const composer = document.querySelector("#composer");
+    const listenButton = document.querySelector("#listenButton");
+    const clearButton = document.querySelector("#clearButton");
+    const themeSelect = document.querySelector("#themeSelect");
+    const personaInput = document.querySelector("#personaInput");
+    const voiceToggle = document.querySelector("#voiceToggle");
+    const scanToggle = document.querySelector("#scanToggle");
+    const voiceChip = document.querySelector("#voiceChip");
+    const statusText = document.querySelector("#statusText");
+    const clockChip = document.querySelector("#clockChip");
+    const orbLabel = document.querySelector("#orbLabel");
+    const assistantOrb = document.querySelector("#assistantOrb");
+    const audioColumns = document.querySelectorAll(".audio-column");
+
+    const commands = [
+      {
+        match: ["status", "system"],
+        reply: () => `All systems are nominal. CPU ${metric("#cpuMetric")}, memory ${metric("#memMetric")}, network secure, and assistant mode ${metric("#modeMetric")}.`
+      },
+      {
+        match: ["time", "clock"],
+        reply: () => `The local time is ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`
+      },
+      {
+        match: ["focus"],
+        reply: () => {
+          document.querySelector("#modeMetric").textContent = "Focus";
+          statusText.textContent = "Focus mode";
+          return "Focus mode activated. I have reduced visual noise and prioritized command responses.";
+        }
+      },
+      {
+        match: ["background", "theme", "design"],
+        reply: () => {
+          cycleTheme();
+          return "Background design updated. I can rotate the interface between blue, command green, and aurora amber.";
+        }
+      },
+      {
+        match: ["room"],
+        reply: () => {
+          document.querySelector("#modeMetric").textContent = "Room";
+          statusText.textContent = "Room mode";
+          return "Room mode is active. The assistant arrival sequence, command-room panels, HUD circle, and side audio meters are calibrated.";
+        }
+      },
+      {
+        match: ["voice", "microphone", "speaker"],
+        reply: () => "Voice control is ready. Use the microphone button for input, and the side meters will rise and fall while I listen or speak."
+      },
+      {
+        match: ["visual", "scan", "contrast"],
+        reply: () => "Visual scan complete. The center frame is now a high-contrast technical HUD with calibrated motion and cleaner circular targeting rings."
+      },
+      {
+        match: ["skill", "skills", "task"],
+        reply: () => "Refined skills are loaded: voice control, room mode, visual scan, system status, focus mode, time check, and background switching."
+      },
+      {
+        match: ["hello", "hi", "hey"],
+        reply: () => `Hello. ${state.name} is online and ready for commands.`
+      },
+      {
+        match: ["clear"],
+        reply: () => {
+          clearChat();
+          return "Chat cleared.";
+        }
+      }
+    ];
+
+    function metric(selector) {
+      return document.querySelector(selector).textContent;
+    }
+
+    function addMessage(text, type = "assistant") {
+      const message = document.createElement("div");
+      message.className = `message ${type}`;
+      message.textContent = text;
+      chatLog.appendChild(message);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    function addLog(text) {
+      const item = document.createElement("div");
+      item.className = "log-line";
+      item.textContent = `${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}  ${text}`;
+      activityLog.prepend(item);
+      while (activityLog.children.length > 6) {
+        activityLog.lastElementChild.remove();
+      }
+    }
+
+    function setAudioActive(active) {
+      assistantOrb.classList.toggle("is-active", active);
+      audioColumns.forEach((column) => column.classList.toggle("is-active", active));
+    }
+
+    function speak(text) {
+      if (!voiceToggle.checked || !("speechSynthesis" in window)) return false;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.92;
+      utterance.pitch = 0.86;
+      utterance.onstart = () => setAudioActive(true);
+      utterance.onend = () => setAudioActive(false);
+      utterance.onerror = () => setAudioActive(false);
+      window.speechSynthesis.speak(utterance);
+      return true;
+    }
+
+    function handleCommand(raw) {
+      const text = raw.trim();
+      if (!text) return;
+
+      addMessage(text, "user");
+      addLog(`Command received: ${text}`);
+      orbLabel.textContent = "Processing command packet...";
+      setAudioActive(true);
+
+      const lower = text.toLowerCase();
+      const found = commands.find((command) => command.match.some((word) => lower.includes(word)));
+      const reply = found
+        ? found.reply()
+        : `I can help with status, time, focus mode, background changes, and voice input. For a true live AI brain, connect this interface to your preferred backend API.`;
+
+      window.setTimeout(() => {
+        addMessage(reply);
+        addLog("Response delivered");
+        orbLabel.textContent = "Awaiting next command.";
+        const isSpeaking = speak(reply);
+        if (!isSpeaking) {
+          window.setTimeout(() => setAudioActive(false), 650);
+        }
+      }, 280);
+    }
+
+    function clearChat() {
+      chatLog.innerHTML = "";
+      addMessage(`${state.name} online. Command interface initialized.`);
+      addLog("Chat buffer reset");
+    }
+
+    function cycleTheme() {
+      state.themeIndex = (state.themeIndex + 1) % state.themes.length;
+      themeSelect.value = state.themes[state.themeIndex];
+      applyTheme(themeSelect.value);
+    }
+
+    function applyTheme(theme) {
+      document.body.classList.remove("theme-command", "theme-aurora");
+      if (theme) document.body.classList.add(theme);
+      state.themeIndex = state.themes.indexOf(theme);
+      addLog(`Background set to ${themeSelect.options[themeSelect.selectedIndex].text}`);
+    }
+
+    function updateClock() {
+      clockChip.textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+
+    function updateMetrics() {
+      if (!scanToggle.checked) return;
+      const cpu = Math.round(14 + Math.random() * 44);
+      const mem = Math.round(32 + Math.random() * 36);
+      document.querySelector("#cpuMetric").textContent = `${cpu}%`;
+      document.querySelector("#memMetric").textContent = `${mem}%`;
+    }
+
+    function setupVoice() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        voiceChip.textContent = "Voice unavailable";
+        listenButton.disabled = true;
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = "en-US";
+
+      recognition.onstart = () => {
+        state.listening = true;
+        listenButton.textContent = "stop";
+        voiceChip.textContent = "Listening";
+        orbLabel.textContent = "Listening for voice command...";
+        setAudioActive(true);
+      };
+
+      recognition.onend = () => {
+        state.listening = false;
+        listenButton.textContent = "mic";
+        voiceChip.textContent = "Voice ready";
+        orbLabel.textContent = "Awaiting command input.";
+        if (!window.speechSynthesis?.speaking) {
+          setAudioActive(false);
+        }
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        commandInput.value = transcript;
+        handleCommand(transcript);
+      };
+
+      recognition.onerror = () => {
+        voiceChip.textContent = "Voice blocked";
+        addLog("Voice input needs browser permission");
+      };
+
+      listenButton.addEventListener("click", () => {
+        if (state.listening) {
+          recognition.stop();
+        } else {
+          recognition.start();
+        }
+      });
+    }
+
+    function drawBackground() {
+      const canvas = document.querySelector("#matrix");
+      const context = canvas.getContext("2d");
+      let width;
+      let height;
+      let particles = [];
+
+      function resize() {
+        width = canvas.width = window.innerWidth * window.devicePixelRatio;
+        height = canvas.height = window.innerHeight * window.devicePixelRatio;
+        particles = Array.from({ length: Math.round(window.innerWidth / 9) }, () => ({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          speed: 0.35 + Math.random() * 1.4,
+          size: 1 + Math.random() * 2.8
+        }));
+      }
+
+      function frame() {
+        context.clearRect(0, 0, width, height);
+        context.fillStyle = "rgba(85, 223, 255, 0.18)";
+        context.strokeStyle = "rgba(85, 223, 255, 0.1)";
+
+        particles.forEach((particle, index) => {
+          particle.y += particle.speed * window.devicePixelRatio;
+          if (particle.y > height) {
+            particle.y = -8;
+            particle.x = Math.random() * width;
+          }
+          context.beginPath();
+          context.arc(particle.x, particle.y, particle.size * window.devicePixelRatio, 0, Math.PI * 2);
+          context.fill();
+
+          const next = particles[index + 1];
+          if (next && Math.abs(next.x - particle.x) < 130 * window.devicePixelRatio) {
+            context.beginPath();
+            context.moveTo(particle.x, particle.y);
+            context.lineTo(next.x, next.y);
+            context.stroke();
+          }
+        });
+
+        requestAnimationFrame(frame);
+      }
+
+      window.addEventListener("resize", resize);
+      resize();
+      frame();
+    }
+
+    composer.addEventListener("submit", (event) => {
+      event.preventDefault();
+      handleCommand(commandInput.value);
+      commandInput.value = "";
+    });
+
+    document.querySelectorAll("[data-command]").forEach((button) => {
+      button.addEventListener("click", () => handleCommand(button.dataset.command));
+    });
+
+    clearButton.addEventListener("click", clearChat);
+    themeSelect.addEventListener("change", () => applyTheme(themeSelect.value));
+    personaInput.addEventListener("input", () => {
+      state.name = personaInput.value.trim() || "Astra";
+      document.querySelector("h1").textContent = `${state.name} AI Assistant`;
+      addLog(`Assistant renamed to ${state.name}`);
+    });
+
+    updateClock();
+    clearChat();
+    setupVoice();
+    drawBackground();
+    window.setInterval(updateClock, 1000);
+    window.setInterval(updateMetrics, 2500);
+  </script>
+</body>
+</html>
